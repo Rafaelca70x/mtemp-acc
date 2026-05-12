@@ -577,7 +577,7 @@ elif pagina == "📈 Visualização Gráfica":
             col1, col2, col3 = st.columns(3)
             with col1:
                 startRec = st.number_input( 'Indique o início do registro', value=0, step=1, max_value=max_val)
-                c1_index = st.number_input( 'Índice C1 ', value=1000, step=1, max_value=2000)
+                c1_index = st.number_input( 'Índice C1 ', value=1000, step=1, max_value=20000)
             with col2: 
                 endRec = st.number_input( 'Indique o final do registro', value=max_val, step=1, max_value=max_val)
                 c2_index = st.number_input( 'Índice C2', value=1000, step=1, max_value=2000)
