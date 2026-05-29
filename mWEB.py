@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import math
 import matplotlib.pyplot as plt
+import unicodedata
 from scipy.optimize import minimize_scalar
 from processamento import balanceProcessing, jumpProcessing, tugProcessing, ytestProcessing, jointSenseProcessing
 import matplotlib.gridspec as gridspec
@@ -90,31 +91,34 @@ def carregar_dados_generico(arquivo):
         if df is None:
             raise last_err
 
-        def _normalizar_coluna(col):
-            return "".join(ch for ch in str(col).strip().lower() if ch.isalnum())
+        def _normalize_column_name(col):
+            normalized = unicodedata.normalize("NFKD", str(col).strip().lower())
+            normalized = "".join(ch for ch in normalized if ch.isalnum())
+            return normalized.replace("epoc", "epoch")
 
-        def _buscar_coluna(alvos):
+        def _find_column(targets):
+            normalized_targets = [_normalize_column_name(target) for target in targets]
             for col in df.columns:
-                nome_col = _normalizar_coluna(col)
-                if any(alvo in nome_col for alvo in alvos):
+                nome_col = _normalize_column_name(col)
+                if any(alvo in nome_col for alvo in normalized_targets):
                     return col
             return None
 
         if df.shape[1] == 6:
-            tempo_col = _buscar_coluna(["elapsed", "tempo"])
+            tempo_col = _find_column(["elapsed", "tempo"])
             if tempo_col is not None:
                 tempo_ms = pd.to_numeric(df[tempo_col], errors="coerce") * 1000.0
             else:
-                epoch_col = _buscar_coluna(["epoc", "epoch"])
+                epoch_col = _find_column(["epoch"])
                 if epoch_col is not None:
                     tempo_ms = pd.to_numeric(df[epoch_col], errors="coerce")
                 else:
-                    # Fallback: assume 6-col layout [epoch/epoc, timestamp, elapsed, x, y, z]
+                    # Fallback: assume 6-col layout [epoch, timestamp, elapsed (s), x, y, z]
                     tempo_ms = pd.to_numeric(df.iloc[:, 2], errors="coerce") * 1000.0
 
-            x_col = _buscar_coluna(["xaxis", "accx", "aceleracaox", "xg"])
-            y_col = _buscar_coluna(["yaxis", "accy", "aceleracaoy", "yg"])
-            z_col = _buscar_coluna(["zaxis", "accz", "aceleracaoz", "zg"])
+            x_col = _find_column(["xaxis", "accx", "aceleraçãox", "xg"])
+            y_col = _find_column(["yaxis", "accy", "aceleraçãoy", "yg"])
+            z_col = _find_column(["zaxis", "accz", "aceleraçãoz", "zg"])
             # Fallback: assume x/y/z are the last three columns in the 6-col layout
             x_col = x_col or df.columns[3]
             y_col = y_col or df.columns[4]
@@ -1275,7 +1279,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
 
 
 
