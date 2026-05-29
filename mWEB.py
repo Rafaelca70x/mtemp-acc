@@ -22,13 +22,13 @@ st.markdown(
     """
     <style>
       .stApp {
-        background: linear-gradient(135deg, #ffffff 0%, #f2f2f2 40%, #e6e6e6 100%);
+        background-color: var(--background-color);
       }
       header[data-testid="stHeader"] {
-        background: linear-gradient(135deg, #ffffff 0%, #f2f2f2 40%, #e6e6e6 100%) !important;
+        background-color: var(--background-color) !important;
       }
       .block-container { background: transparent; }
-      section[data-testid="stSidebar"] { background: transparent; }
+      section[data-testid="stSidebar"] { background-color: var(--secondary-background-color); }
     </style>
     """,
     unsafe_allow_html=True
@@ -1310,7 +1310,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
 
 
 
