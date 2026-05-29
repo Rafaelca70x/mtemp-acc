@@ -41,6 +41,16 @@ st.markdown("<h1 style='text-align: center; color: #1E90FF;'>Momentum Web</h1>",
 # =========================
 
 AUDIO_EXTS = {"3ga", "aac", "m4a", "mp3", "wav", "ogg", "flac"}
+MAX_UNIT_SUFFIX_LENGTH = 3
+SIX_COL_ELAPSED_INDEX = 2
+SIX_COL_X_INDEX = 3
+SIX_COL_Y_INDEX = 4
+SIX_COL_Z_INDEX = 5
+ELAPSED_COLUMN_NAMES = ["elapsed", "tempo"]
+EPOCH_COLUMN_NAMES = ["epoch"]
+X_AXIS_COLUMN_NAMES = ["xaxis", "accx", "aceleraçãox", "xg"]
+Y_AXIS_COLUMN_NAMES = ["yaxis", "accy", "aceleraçãoy", "yg"]
+Z_AXIS_COLUMN_NAMES = ["zaxis", "accz", "aceleraçãoz", "zg"]
 
 def _parece_audio_3gp_mp4(head: bytes) -> bool:
     return len(head) >= 12 and head[4:8] == b"ftyp"
@@ -96,14 +106,12 @@ def carregar_dados_generico(arquivo):
             normalized = "".join(ch for ch in normalized if ch.isalnum() or ch == "_")
             return normalized.replace("epoc", "epoch")
 
-        max_suffix_length = 3  # Permite sufixos curtos de unidade (ex: ms, g, hz)
-
         def _matches_target(column_name, target):
             if column_name == target:
                 return True
             if column_name.startswith(target):
                 suffix = column_name[len(target):]
-                return len(suffix) <= max_suffix_length
+                return len(suffix) <= MAX_UNIT_SUFFIX_LENGTH
             return False
 
         def _find_column(targets):
@@ -124,30 +132,29 @@ def carregar_dados_generico(arquivo):
             return None
 
         if df.shape[1] == 6:
-            elapsed_col_index = 2
-            x_col_index, y_col_index, z_col_index = 3, 4, 5
-            tempo_col = _find_column(["elapsed", "tempo"])
+            tempo_col = _find_column(ELAPSED_COLUMN_NAMES)
             if tempo_col is not None:
                 tempo_ms = pd.to_numeric(df[tempo_col], errors="coerce") * 1000.0
             else:
-                epoch_col = _find_column(["epoch"])
+                epoch_col = _find_column(EPOCH_COLUMN_NAMES)
                 if epoch_col is not None:
                     tempo_ms = pd.to_numeric(df[epoch_col], errors="coerce")
                 else:
                     # Fallback: assume 6-col layout [epoch, timestamp, elapsed (s), x, y, z].
                     # Expected unit: elapsed time in seconds, converting to ms here.
+                    # Se o formato não estiver nesse padrão, revise os cabeçalhos do CSV.
                     tempo_ms = (
-                        pd.to_numeric(df.iloc[:, elapsed_col_index], errors="coerce")
+                        pd.to_numeric(df.iloc[:, SIX_COL_ELAPSED_INDEX], errors="coerce")
                         * 1000.0
                     )
 
-            x_col = _find_column(["xaxis", "accx", "aceleraçãox", "xg"])
-            y_col = _find_column(["yaxis", "accy", "aceleraçãoy", "yg"])
-            z_col = _find_column(["zaxis", "accz", "aceleraçãoz", "zg"])
+            x_col = _find_column(X_AXIS_COLUMN_NAMES)
+            y_col = _find_column(Y_AXIS_COLUMN_NAMES)
+            z_col = _find_column(Z_AXIS_COLUMN_NAMES)
             # Fallback: assume x/y/z are the last three columns in the 6-col layout
-            x_col = x_col or df.columns[x_col_index]
-            y_col = y_col or df.columns[y_col_index]
-            z_col = z_col or df.columns[z_col_index]
+            x_col = x_col or df.columns[SIX_COL_X_INDEX]
+            y_col = y_col or df.columns[SIX_COL_Y_INDEX]
+            z_col = z_col or df.columns[SIX_COL_Z_INDEX]
 
             dados = pd.DataFrame(
                 {
@@ -1303,7 +1310,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
 
 
 
