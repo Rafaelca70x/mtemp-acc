@@ -8,7 +8,7 @@ from scipy.optimize import minimize_scalar
 from processamento import balanceProcessing, jumpProcessing, tugProcessing, ytestProcessing, jointSenseProcessing
 import matplotlib.gridspec as gridspec
 from matplotlib.patches import Ellipse
-from scipy.integrate import trapezoid
+from scipy.integrate import cumulative_trapezoid, trapezoid
 from scipy.ndimage import uniform_filter1d
 from textwrap import dedent
 from scipy.signal import butter, filtfilt, detrend
@@ -204,15 +204,12 @@ def _calcular_variaveis_equilibrio(dados, startRec, endRec, fc):
     total_power_ml = trapezoid(psd_ml_sel, freqs_sel)
     total_power_ap = trapezoid(psd_ap_sel, freqs_sel)
 
-    for index, val in enumerate(psd_ml_sel):
-        if np.sum(psd_ml_sel[0:index]) > total_power_ml/2:
-            freq_median_ml = freqs_sel[index-1]
-            break
-
-    for index, val in enumerate(psd_ap_sel):
-        if np.sum(psd_ap_sel[0:index]) > total_power_ap/2:
-            freq_median_ap = freqs_sel[index-1]
-            break
+    cumulative_power_ml = cumulative_trapezoid(psd_ml_sel, freqs_sel, initial=0)
+    cumulative_power_ap = cumulative_trapezoid(psd_ap_sel, freqs_sel, initial=0)
+    median_index_ml = min(np.searchsorted(cumulative_power_ml, total_power_ml / 2), len(freqs_sel) - 1)
+    median_index_ap = min(np.searchsorted(cumulative_power_ap, total_power_ap / 2), len(freqs_sel) - 1)
+    freq_median_ml = freqs_sel[median_index_ml]
+    freq_median_ap = freqs_sel[median_index_ap]
 
     variaveis = [
         ("RMS ML", round(rms_ml, 6)),
