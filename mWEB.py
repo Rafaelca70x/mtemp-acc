@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import math
 import matplotlib.pyplot as plt
+import unicodedata
 from scipy.optimize import minimize_scalar
 from processamento import balanceProcessing, jumpProcessing, tugProcessing, ytestProcessing, jointSenseProcessing
 import matplotlib.gridspec as gridspec
@@ -40,6 +41,16 @@ st.markdown("<h1 style='text-align: center; color: #1E90FF;'>Momentum Web</h1>",
 # =========================
 
 AUDIO_EXTS = {"3ga", "aac", "m4a", "mp3", "wav", "ogg", "flac"}
+MAX_UNIT_SUFFIX_LENGTH = 3
+SIX_COL_ELAPSED_INDEX = 2
+SIX_COL_X_INDEX = 3
+SIX_COL_Y_INDEX = 4
+SIX_COL_Z_INDEX = 5
+ELAPSED_COLUMN_NAMES = ["elapsed", "tempo"]
+EPOCH_COLUMN_NAMES = ["epoch"]
+X_AXIS_COLUMN_NAMES = ["xaxis", "accx", "aceleraçãox", "xg"]
+Y_AXIS_COLUMN_NAMES = ["yaxis", "accy", "aceleraçãoy", "yg"]
+Z_AXIS_COLUMN_NAMES = ["zaxis", "accz", "aceleraçãoz", "zg"]
 
 def _parece_audio_3gp_mp4(head: bytes) -> bool:
     return len(head) >= 12 and head[4:8] == b"ftyp"
@@ -47,7 +58,7 @@ def _parece_audio_3gp_mp4(head: bytes) -> bool:
 def carregar_dados_generico(arquivo):
     """
     - Detecta áudio por extensão ou assinatura e NÃO passa no pandas.
-    - Para CSV/TXT: tenta encodings comuns (utf-8-sig, utf-16, cp1252, latin1).
+    - Para CSV: tenta encodings comuns (utf-8-sig, utf-16, cp1252, latin1).
     """
     try:
         nome = getattr(arquivo, "name", "arquivo").lower()
@@ -90,12 +101,75 @@ def carregar_dados_generico(arquivo):
         if df is None:
             raise last_err
 
-        if df.shape[1] == 5:
+        def _normalize_column_name(col):
+            normalized = unicodedata.normalize("NFKD", str(col).strip().lower())
+            normalized = "".join(ch for ch in normalized if ch.isalnum() or ch == "_")
+            return normalized.replace("epoc", "epoch")
+
+        def _matches_target(column_name, target):
+            if column_name == target:
+                return True
+            if column_name.startswith(target):
+                suffix = column_name[len(target):]
+                return len(suffix) <= MAX_UNIT_SUFFIX_LENGTH
+            return False
+
+        def _find_column(targets):
+            normalized_targets = [_normalize_column_name(target) for target in targets]
+            normalized_targets_compact = [
+                target.replace("_", "") for target in normalized_targets
+            ]
+            for col in df.columns:
+                nome_col = _normalize_column_name(col)
+                nome_col_compact = nome_col.replace("_", "")
+                for alvo, alvo_compact in zip(
+                    normalized_targets, normalized_targets_compact
+                ):
+                    if _matches_target(nome_col, alvo) or _matches_target(
+                        nome_col_compact, alvo_compact
+                    ):
+                        return col
+            return None
+
+        if df.shape[1] == 6:
+            tempo_col = _find_column(ELAPSED_COLUMN_NAMES)
+            if tempo_col is not None:
+                tempo_ms = pd.to_numeric(df[tempo_col], errors="coerce") * 1000.0
+            else:
+                epoch_col = _find_column(EPOCH_COLUMN_NAMES)
+                if epoch_col is not None:
+                    tempo_ms = pd.to_numeric(df[epoch_col], errors="coerce")
+                else:
+                    # Fallback: assume 6-col layout [epoch, timestamp, elapsed (s), x, y, z].
+                    # Expected unit: elapsed time in seconds, converting to ms here.
+                    # Se o formato não estiver nesse padrão, revise os cabeçalhos do CSV.
+                    tempo_ms = (
+                        pd.to_numeric(df.iloc[:, SIX_COL_ELAPSED_INDEX], errors="coerce")
+                        * 1000.0
+                    )
+
+            x_col = _find_column(X_AXIS_COLUMN_NAMES)
+            y_col = _find_column(Y_AXIS_COLUMN_NAMES)
+            z_col = _find_column(Z_AXIS_COLUMN_NAMES)
+            # Fallback: assume x/y/z are the last three columns in the 6-col layout
+            x_col = x_col or df.columns[SIX_COL_X_INDEX]
+            y_col = y_col or df.columns[SIX_COL_Y_INDEX]
+            z_col = z_col or df.columns[SIX_COL_Z_INDEX]
+
+            dados = pd.DataFrame(
+                {
+                    "Tempo": tempo_ms,
+                    "X": pd.to_numeric(df[x_col], errors="coerce"),
+                    "Y": pd.to_numeric(df[y_col], errors="coerce"),
+                    "Z": pd.to_numeric(df[z_col], errors="coerce"),
+                }
+            )
+        elif df.shape[1] == 5:
             dados = df.iloc[:, 1:5].copy()
         elif df.shape[1] == 4:
             dados = df.iloc[:, 0:4].copy()
         else:
-            st.error("O arquivo deve conter 4 ou 5 colunas com cabeçalhos.")
+            st.error("O arquivo deve conter 4, 5 ou 6 colunas com cabeçalhos.")
             return None
 
         dados.columns = ["Tempo", "X", "Y", "Z"]
@@ -145,10 +219,10 @@ elif pagina == "⬆️ Importar Dados":
             # --------- Inercial genérico ---------
             if tipo_teste in {"Registro inercial livre", "Equilíbrio", "Salto", "Propriocepção"}:
                 st.subheader(f"📥 Importar dados: {tipo_teste}")
-                arquivo = st.file_uploader("Selecione o arquivo (CSV ou TXT)", type=["csv", "txt"])
+                arquivo = st.file_uploader("Selecione o arquivo (CSV)", type=["csv"])
                 if arquivo is not None:
                     dados = carregar_dados_generico(arquivo)
-                    # aqui, "dados" será DataFrame (texto) ou dict (áudio) — mas nesse fluxo só aceitamos csv/txt
+                    # aqui, "dados" será DataFrame (texto) ou dict (áudio) — mas nesse fluxo só aceitamos CSV
                     if isinstance(dados, dict):
                         st.error("Você enviou um arquivo de áudio nesse uploader. Use 'Registro de áudio livre'.")
                     elif dados is not None:
@@ -174,22 +248,22 @@ elif pagina == "⬆️ Importar Dados":
             # --------- TUG (acc + gyro) ---------
             elif tipo_teste == "TUG":
                 st.subheader("📱 Importar dados do TUG")
-                arq_acc = st.file_uploader("Selecione o arquivo do acelerômetro (CSV ou TXT)", type=["csv", "txt"], key="tug_acc")
+                arq_acc = st.file_uploader("Selecione o arquivo do acelerômetro (CSV)", type=["csv"], key="tug_acc")
                 if arq_acc is not None:
                     dados_acc = carregar_dados_generico(arq_acc)
                     if isinstance(dados_acc, dict):
-                        st.error("Você enviou um arquivo de áudio no acelerômetro. Precisa ser CSV/TXT.")
+                        st.error("Você enviou um arquivo de áudio no acelerômetro. Precisa ser CSV.")
                     elif dados_acc is not None:
                         st.success("Acelerômetro carregado!")
                         st.dataframe(dados_acc.head())
                         st.session_state["dados_acc"] = dados_acc
                         st.session_state["dados"] = dados_acc
 
-                        arq_gyro = st.file_uploader("Selecione o arquivo do giroscópio (CSV ou TXT)", type=["csv", "txt"], key="tug_gyro")
+                        arq_gyro = st.file_uploader("Selecione o arquivo do giroscópio (CSV)", type=["csv"], key="tug_gyro")
                         if arq_gyro is not None:
                             dados_gyro = carregar_dados_generico(arq_gyro)
                             if isinstance(dados_gyro, dict):
-                                st.error("Você enviou um arquivo de áudio no giroscópio. Precisa ser CSV/TXT.")
+                                st.error("Você enviou um arquivo de áudio no giroscópio. Precisa ser CSV.")
                             elif dados_gyro is not None:
                                 st.success("Giroscópio carregado!")
                                 st.dataframe(dados_gyro.head())
@@ -199,22 +273,22 @@ elif pagina == "⬆️ Importar Dados":
             # --------- Y test (coluna + joelho) ---------
             elif tipo_teste == "Y test":
                 st.subheader("📱 Importar dados do Y test")
-                arq_coluna = st.file_uploader("Selecione o arquivo da coluna (CSV ou TXT)", type=["csv", "txt"], key="y_coluna")
+                arq_coluna = st.file_uploader("Selecione o arquivo da coluna (CSV)", type=["csv"], key="y_coluna")
                 if arq_coluna is not None:
                     dados_coluna = carregar_dados_generico(arq_coluna)
                     if isinstance(dados_coluna, dict):
-                        st.error("Você enviou um arquivo de áudio na coluna. Precisa ser CSV/TXT.")
+                        st.error("Você enviou um arquivo de áudio na coluna. Precisa ser CSV.")
                     elif dados_coluna is not None:
                         st.success("Coluna carregada!")
                         st.dataframe(dados_coluna.head())
                         st.session_state["dados_acc_coluna"] = dados_coluna
                         st.session_state["dados"] = dados_coluna
 
-                        arq_joelho = st.file_uploader("Selecione o arquivo do joelho (CSV ou TXT)", type=["csv", "txt"], key="y_joelho")
+                        arq_joelho = st.file_uploader("Selecione o arquivo do joelho (CSV)", type=["csv"], key="y_joelho")
                         if arq_joelho is not None:
                             dados_joelho = carregar_dados_generico(arq_joelho)
                             if isinstance(dados_joelho, dict):
-                                st.error("Você enviou um arquivo de áudio no joelho. Precisa ser CSV/TXT.")
+                                st.error("Você enviou um arquivo de áudio no joelho. Precisa ser CSV.")
                             elif dados_joelho is not None:
                                 st.success("Joelho carregado!")
                                 st.dataframe(dados_joelho.head())
@@ -1236,15 +1310,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
 
 
 
