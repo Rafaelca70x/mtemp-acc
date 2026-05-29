@@ -93,27 +93,39 @@ def carregar_dados_generico(arquivo):
 
         def _normalize_column_name(col):
             normalized = unicodedata.normalize("NFKD", str(col).strip().lower())
-            normalized = "".join(ch for ch in normalized if ch.isalnum())
+            normalized = "".join(ch for ch in normalized if ch.isalnum() or ch == "_")
             return normalized.replace("epoc", "epoch")
+
+        max_suffix_length = 3  # Permite sufixos curtos de unidade (ex: ms, g, hz)
 
         def _matches_target(column_name, target):
             if column_name == target:
                 return True
             if column_name.startswith(target):
                 suffix = column_name[len(target):]
-                return len(suffix) <= 3
+                return len(suffix) <= max_suffix_length
             return False
 
         def _find_column(targets):
             normalized_targets = [_normalize_column_name(target) for target in targets]
+            normalized_targets_compact = [
+                target.replace("_", "") for target in normalized_targets
+            ]
             for col in df.columns:
                 nome_col = _normalize_column_name(col)
-                for alvo in normalized_targets:
-                    if _matches_target(nome_col, alvo):
+                nome_col_compact = nome_col.replace("_", "")
+                for alvo, alvo_compact in zip(
+                    normalized_targets, normalized_targets_compact
+                ):
+                    if _matches_target(nome_col, alvo) or _matches_target(
+                        nome_col_compact, alvo_compact
+                    ):
                         return col
             return None
 
         if df.shape[1] == 6:
+            elapsed_col_index = 2
+            x_col_index, y_col_index, z_col_index = 3, 4, 5
             tempo_col = _find_column(["elapsed", "tempo"])
             if tempo_col is not None:
                 tempo_ms = pd.to_numeric(df[tempo_col], errors="coerce") * 1000.0
@@ -124,13 +136,15 @@ def carregar_dados_generico(arquivo):
                 else:
                     # Fallback: assume 6-col layout [epoch, timestamp, elapsed (s), x, y, z].
                     # Expected unit: elapsed time in seconds, converting to ms here.
-                    tempo_ms = pd.to_numeric(df.iloc[:, 2], errors="coerce") * 1000.0
+                    tempo_ms = (
+                        pd.to_numeric(df.iloc[:, elapsed_col_index], errors="coerce")
+                        * 1000.0
+                    )
 
             x_col = _find_column(["xaxis", "accx", "aceleraçãox", "xg"])
             y_col = _find_column(["yaxis", "accy", "aceleraçãoy", "yg"])
             z_col = _find_column(["zaxis", "accz", "aceleraçãoz", "zg"])
             # Fallback: assume x/y/z are the last three columns in the 6-col layout
-            x_col_index, y_col_index, z_col_index = 3, 4, 5
             x_col = x_col or df.columns[x_col_index]
             y_col = y_col or df.columns[y_col_index]
             z_col = z_col or df.columns[z_col_index]
@@ -1289,7 +1303,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
 
 
 
