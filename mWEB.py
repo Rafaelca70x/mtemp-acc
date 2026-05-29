@@ -93,17 +93,23 @@ def carregar_dados_generico(arquivo):
 
         def _normalize_column_name(col):
             normalized = unicodedata.normalize("NFKD", str(col).strip().lower())
-            normalized = "".join(ch for ch in normalized if ch.isalnum() or ch == "_")
+            normalized = "".join(ch for ch in normalized if ch.isalnum())
             return normalized.replace("epoc", "epoch")
 
+        def _matches_target(column_name, target):
+            if column_name == target:
+                return True
+            if column_name.startswith(target):
+                suffix = column_name[len(target):]
+                return len(suffix) <= 3
+            return False
+
         def _find_column(targets):
-            normalized_targets = [
-                _normalize_column_name(target).replace("_", "") for target in targets
-            ]
+            normalized_targets = [_normalize_column_name(target) for target in targets]
             for col in df.columns:
-                nome_col = _normalize_column_name(col).replace("_", "")
+                nome_col = _normalize_column_name(col)
                 for alvo in normalized_targets:
-                    if nome_col == alvo or nome_col.startswith(alvo):
+                    if _matches_target(nome_col, alvo):
                         return col
             return None
 
@@ -117,16 +123,17 @@ def carregar_dados_generico(arquivo):
                     tempo_ms = pd.to_numeric(df[epoch_col], errors="coerce")
                 else:
                     # Fallback: assume 6-col layout [epoch, timestamp, elapsed (s), x, y, z].
-                    # Expected unit: elapsed time in seconds, converted to ms below.
+                    # Expected unit: elapsed time in seconds, converting to ms here.
                     tempo_ms = pd.to_numeric(df.iloc[:, 2], errors="coerce") * 1000.0
 
             x_col = _find_column(["xaxis", "accx", "aceleraçãox", "xg"])
             y_col = _find_column(["yaxis", "accy", "aceleraçãoy", "yg"])
             z_col = _find_column(["zaxis", "accz", "aceleraçãoz", "zg"])
             # Fallback: assume x/y/z are the last three columns in the 6-col layout
-            x_col = x_col or df.columns[3]
-            y_col = y_col or df.columns[4]
-            z_col = z_col or df.columns[5]
+            x_col_index, y_col_index, z_col_index = 3, 4, 5
+            x_col = x_col or df.columns[x_col_index]
+            y_col = y_col or df.columns[y_col_index]
+            z_col = z_col or df.columns[z_col_index]
 
             dados = pd.DataFrame(
                 {
@@ -1282,7 +1289,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
 
 
 
