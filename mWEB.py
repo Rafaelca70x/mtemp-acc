@@ -93,15 +93,18 @@ def carregar_dados_generico(arquivo):
 
         def _normalize_column_name(col):
             normalized = unicodedata.normalize("NFKD", str(col).strip().lower())
-            normalized = "".join(ch for ch in normalized if ch.isalnum())
+            normalized = "".join(ch for ch in normalized if ch.isalnum() or ch == "_")
             return normalized.replace("epoc", "epoch")
 
         def _find_column(targets):
-            normalized_targets = [_normalize_column_name(target) for target in targets]
+            normalized_targets = [
+                _normalize_column_name(target).replace("_", "") for target in targets
+            ]
             for col in df.columns:
-                nome_col = _normalize_column_name(col)
-                if any(alvo in nome_col for alvo in normalized_targets):
-                    return col
+                nome_col = _normalize_column_name(col).replace("_", "")
+                for alvo in normalized_targets:
+                    if nome_col == alvo or nome_col.startswith(alvo):
+                        return col
             return None
 
         if df.shape[1] == 6:
@@ -113,7 +116,8 @@ def carregar_dados_generico(arquivo):
                 if epoch_col is not None:
                     tempo_ms = pd.to_numeric(df[epoch_col], errors="coerce")
                 else:
-                    # Fallback: assume 6-col layout [epoch, timestamp, elapsed (s), x, y, z]
+                    # Fallback: assume 6-col layout [epoch, timestamp, elapsed (s), x, y, z].
+                    # Expected unit: elapsed time in seconds, converted to ms below.
                     tempo_ms = pd.to_numeric(df.iloc[:, 2], errors="coerce") * 1000.0
 
             x_col = _find_column(["xaxis", "accx", "aceleraçãox", "xg"])
@@ -140,8 +144,7 @@ def carregar_dados_generico(arquivo):
             st.error("O arquivo deve conter 4, 5 ou 6 colunas com cabeçalhos.")
             return None
 
-        if list(dados.columns) != ["Tempo", "X", "Y", "Z"]:
-            dados.columns = ["Tempo", "X", "Y", "Z"]
+        dados.columns = ["Tempo", "X", "Y", "Z"]
         return dados
 
     except Exception as e:
@@ -1279,7 +1282,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
 
 
 
