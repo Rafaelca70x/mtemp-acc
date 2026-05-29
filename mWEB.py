@@ -189,43 +189,36 @@ def _calcular_variaveis_equilibrio(dados, startRec, endRec, fc):
     rms_ml, rms_ap, total_deviation, ellipse_area, avg_x, avg_y, width, height, angle, direction = \
         balanceProcessing.processar_equilibrio(dados, startRec, endRec, 1, 1, fc)
 
-    tempo_sel, ml_sel, ap_sel, freqs_sel, psd_ml_sel, psd_ap_sel = \
-        balanceProcessing.processar_equilibrio(dados, startRec, endRec, 1, 0, fc)
-    
-    LF_power_ml = trapezoid(psd_ml_sel[0:4], freqs_sel[0:4])
-    LF_power_ap = trapezoid(psd_ap_sel[0:4], freqs_sel[0:4])
-    
-    MF_power_ml = trapezoid(psd_ml_sel[5:19], freqs_sel[5:19])
-    MF_power_ap = trapezoid(psd_ap_sel[5:19], freqs_sel[5:19])
-
-    HF_power_ml = trapezoid(psd_ml_sel[20:79], freqs_sel[20:79])
-    HF_power_ap = trapezoid(psd_ap_sel[20:79], freqs_sel[20:79])
-    
-    total_power_ml = trapezoid(psd_ml_sel, freqs_sel)
-    total_power_ap = trapezoid(psd_ap_sel, freqs_sel)
-
-    cumulative_power_ml = cumulative_trapezoid(psd_ml_sel, freqs_sel, initial=0)
-    cumulative_power_ap = cumulative_trapezoid(psd_ap_sel, freqs_sel, initial=0)
-    median_index_ml = min(np.searchsorted(cumulative_power_ml, total_power_ml / 2), len(freqs_sel) - 1)
-    median_index_ap = min(np.searchsorted(cumulative_power_ap, total_power_ap / 2), len(freqs_sel) - 1)
-    freq_median_ml = freqs_sel[median_index_ml]
-    freq_median_ap = freqs_sel[median_index_ap]
+    # Processamento espectral removido da exportação do Equilíbrio.
+    # O código fica preservado abaixo caso essas variáveis voltem a ser usadas.
+    #
+    # tempo_sel, ml_sel, ap_sel, freqs_sel, psd_ml_sel, psd_ap_sel = \
+    #     balanceProcessing.processar_equilibrio(dados, startRec, endRec, 1, 0, fc)
+    #
+    # LF_power_ml = trapezoid(psd_ml_sel[0:4], freqs_sel[0:4])
+    # LF_power_ap = trapezoid(psd_ap_sel[0:4], freqs_sel[0:4])
+    #
+    # MF_power_ml = trapezoid(psd_ml_sel[5:19], freqs_sel[5:19])
+    # MF_power_ap = trapezoid(psd_ap_sel[5:19], freqs_sel[5:19])
+    #
+    # HF_power_ml = trapezoid(psd_ml_sel[20:79], freqs_sel[20:79])
+    # HF_power_ap = trapezoid(psd_ap_sel[20:79], freqs_sel[20:79])
+    #
+    # total_power_ml = trapezoid(psd_ml_sel, freqs_sel)
+    # total_power_ap = trapezoid(psd_ap_sel, freqs_sel)
+    #
+    # cumulative_power_ml = cumulative_trapezoid(psd_ml_sel, freqs_sel, initial=0)
+    # cumulative_power_ap = cumulative_trapezoid(psd_ap_sel, freqs_sel, initial=0)
+    # median_index_ml = min(np.searchsorted(cumulative_power_ml, total_power_ml / 2), len(freqs_sel) - 1)
+    # median_index_ap = min(np.searchsorted(cumulative_power_ap, total_power_ap / 2), len(freqs_sel) - 1)
+    # freq_median_ml = freqs_sel[median_index_ml]
+    # freq_median_ap = freqs_sel[median_index_ap]
 
     variaveis = [
+        ("Desvio total", round(total_deviation, 6)),
         ("RMS ML", round(rms_ml, 6)),
         ("RMS AP", round(rms_ap, 6)),
-        ("Desvio total", round(total_deviation, 6)),
         ("Área elipse", round(ellipse_area, 6)),
-        ("Potência total ML", round(total_power_ml, 10)),
-        ("Potência total AP", round(total_power_ap, 10)),
-        ("Potência Baixa Freq ML", round(LF_power_ml, 10)),
-        ("Potência Baixa Freq AP", round(LF_power_ap, 10)),
-        ("Potência Média Freq ML", round(MF_power_ml, 10)),
-        ("Potência Média Freq AP", round(MF_power_ap, 10)),
-        ("Potência Alta Freq ML", round(HF_power_ml, 10)),
-        ("Potência Alta Freq AP", round(HF_power_ap, 10)),
-        ("Frequência mediana ML", round(freq_median_ml, 10)),
-        ("Frequência mediana AP", round(freq_median_ap, 10)),
     ]
     return variaveis
 
