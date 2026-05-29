@@ -105,11 +105,11 @@ def carregar_dados_generico(arquivo):
             if tempo_col is not None:
                 tempo_ms = pd.to_numeric(df[tempo_col], errors="coerce") * 1000.0
             else:
-                epoc_col = _buscar_coluna(["epoc", "epoch"])
-                if epoc_col is not None:
-                    tempo_ms = pd.to_numeric(df[epoc_col], errors="coerce")
+                epoch_col = _buscar_coluna(["epoc", "epoch"])
+                if epoch_col is not None:
+                    tempo_ms = pd.to_numeric(df[epoch_col], errors="coerce")
                 else:
-                    # Fallback: assume 6-col layout [epoc, timestamp, elapsed, x, y, z]
+                    # Fallback: assume 6-col layout [epoch/epoc, timestamp, elapsed, x, y, z]
                     tempo_ms = pd.to_numeric(df.iloc[:, 2], errors="coerce") * 1000.0
 
             x_col = _buscar_coluna(["xaxis", "accx", "aceleracaox", "xg"])
@@ -1275,7 +1275,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
 
 
 
