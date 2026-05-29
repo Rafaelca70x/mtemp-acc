@@ -60,15 +60,10 @@ def processar_equilibrio(df, startRec, endRec, sel, output, filter):
     df_proc = df.copy()
     time_vec = df_proc["Tempo"]
     x = df_proc["X"]
-    y = df_proc["Y"]
     z = df_proc["Z"]
 
+    ml = x
     ap = z
-    if np.mean(x) > np.mean(y):
-        ml = y
-
-    else:
-        ml = x
 
     # Converter tempo para segundos
     t_original = time_vec / 1000  # ms para s

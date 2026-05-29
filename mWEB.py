@@ -226,7 +226,7 @@ def _calcular_variaveis_equilibrio(dados, startRec, endRec, fc):
         ("Potência Média Freq ML", round(MF_power_ml, 10)),
         ("Potência Média Freq AP", round(MF_power_ap, 10)),
         ("Potência Alta Freq ML", round(HF_power_ml, 10)),
-        ("Potência Alta Freq AP", round(HF_power_ml, 10)),
+        ("Potência Alta Freq AP", round(HF_power_ap, 10)),
         ("Frequência mediana ML", round(freq_median_ml, 10)),
         ("Frequência mediana AP", round(freq_median_ap, 10)),
     ]
