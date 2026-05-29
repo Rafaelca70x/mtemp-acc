@@ -179,6 +179,79 @@ def carregar_dados_generico(arquivo):
         st.error(f"Erro ao ler o arquivo: {e}")
         return None
 
+def _formatar_resultado_txt(variaveis):
+    resultado_txt = "Variável\tValor\n"
+    for nome, valor in variaveis:
+        resultado_txt += f"{nome}\t{valor}\n"
+    return resultado_txt
+
+def _calcular_variaveis_equilibrio(dados, startRec, endRec, fc):
+    rms_ml, rms_ap, total_deviation, ellipse_area, avg_x, avg_y, width, height, angle, direction = \
+        balanceProcessing.processar_equilibrio(dados, startRec, endRec, 1, 1, fc)
+
+    tempo_sel, ml_sel, ap_sel, freqs_sel, psd_ml_sel, psd_ap_sel = \
+        balanceProcessing.processar_equilibrio(dados, startRec, endRec, 1, 0, fc)
+    
+    LF_power_ml = trapezoid(psd_ml_sel[0:4], freqs_sel[0:4])
+    LF_power_ap = trapezoid(psd_ap_sel[0:4], freqs_sel[0:4])
+    
+    MF_power_ml = trapezoid(psd_ml_sel[5:19], freqs_sel[5:19])
+    MF_power_ap = trapezoid(psd_ap_sel[5:19], freqs_sel[5:19])
+
+    HF_power_ml = trapezoid(psd_ml_sel[20:79], freqs_sel[20:79])
+    HF_power_ap = trapezoid(psd_ap_sel[20:79], freqs_sel[20:79])
+    
+    total_power_ml = trapezoid(psd_ml_sel, freqs_sel)
+    total_power_ap = trapezoid(psd_ap_sel, freqs_sel)
+
+    for index, val in enumerate(psd_ml_sel):
+        if np.sum(psd_ml_sel[0:index]) > total_power_ml/2:
+            freq_median_ml = freqs_sel[index-1]
+            break
+
+    for index, val in enumerate(psd_ap_sel):
+        if np.sum(psd_ap_sel[0:index]) > total_power_ap/2:
+            freq_median_ap = freqs_sel[index-1]
+            break
+
+    variaveis = [
+        ("RMS ML", round(rms_ml, 6)),
+        ("RMS AP", round(rms_ap, 6)),
+        ("Desvio total", round(total_deviation, 6)),
+        ("Área elipse", round(ellipse_area, 6)),
+        ("Potência total ML", round(total_power_ml, 10)),
+        ("Potência total AP", round(total_power_ap, 10)),
+        ("Potência Baixa Freq ML", round(LF_power_ml, 10)),
+        ("Potência Baixa Freq AP", round(LF_power_ap, 10)),
+        ("Potência Média Freq ML", round(MF_power_ml, 10)),
+        ("Potência Média Freq AP", round(MF_power_ap, 10)),
+        ("Potência Alta Freq ML", round(HF_power_ml, 10)),
+        ("Potência Alta Freq AP", round(HF_power_ml, 10)),
+        ("Frequência mediana ML", round(freq_median_ml, 10)),
+        ("Frequência mediana AP", round(freq_median_ap, 10)),
+    ]
+    return variaveis
+
+def _montar_df_medias_equilibrio(resultados_individuais):
+    nomes = []
+    for variaveis in resultados_individuais:
+        for nome, _ in variaveis:
+            if nome not in nomes:
+                nomes.append(nome)
+
+    valores_por_execucao = []
+    for variaveis in resultados_individuais:
+        valores_por_execucao.append({nome: valor for nome, valor in variaveis})
+
+    dados_df = {"variavel": nomes}
+    for indice, valores in enumerate(valores_por_execucao, start=1):
+        dados_df[f"valor_{indice}"] = [valores.get(nome, np.nan) for nome in nomes]
+
+    df = pd.DataFrame(dados_df)
+    colunas_valores = [col for col in df.columns if col.startswith("valor_")]
+    df["media_3"] = df[colunas_valores].mean(axis=1, skipna=True)
+    return df
+
 # =========================
 #      NAVEGAÇÃO / PÁGINAS
 # =========================
@@ -219,16 +292,74 @@ elif pagina == "⬆️ Importar Dados":
             # --------- Inercial genérico ---------
             if tipo_teste in {"Registro inercial livre", "Equilíbrio", "Salto", "Propriocepção"}:
                 st.subheader(f"📥 Importar dados: {tipo_teste}")
-                arquivo = st.file_uploader("Selecione o arquivo (CSV)", type=["csv"])
-                if arquivo is not None:
-                    dados = carregar_dados_generico(arquivo)
-                    # aqui, "dados" será DataFrame (texto) ou dict (áudio) — mas nesse fluxo só aceitamos CSV
-                    if isinstance(dados, dict):
-                        st.error("Você enviou um arquivo de áudio nesse uploader. Use 'Registro de áudio livre'.")
-                    elif dados is not None:
-                        st.success("Dados carregados com sucesso")
-                        st.session_state["dados"] = dados
-                        st.session_state["tipo_teste"] = tipo_teste
+                if tipo_teste == "Equilíbrio":
+                    modo_equilibrio = st.radio(
+                        "Modo de processamento",
+                        ["Três arquivos", "Individual"],
+                        index=0,
+                        key="equilibrio_modo_radio",
+                    )
+                    st.session_state["equilibrio_modo_processamento"] = (
+                        "3_arquivos" if modo_equilibrio == "Três arquivos" else "individual"
+                    )
+
+                    if modo_equilibrio == "Individual":
+                        arquivo = st.file_uploader(
+                            "Selecione o arquivo (CSV)",
+                            type=["csv"],
+                            key="equilibrio_arquivo_individual",
+                        )
+                        if arquivo is not None:
+                            dados = carregar_dados_generico(arquivo)
+                            # aqui, "dados" será DataFrame (texto) ou dict (áudio) — mas nesse fluxo só aceitamos CSV
+                            if isinstance(dados, dict):
+                                st.error("Você enviou um arquivo de áudio nesse uploader. Use 'Registro de áudio livre'.")
+                            elif dados is not None:
+                                st.success("Dados carregados com sucesso")
+                                st.session_state["dados"] = dados
+                                st.session_state["tipo_teste"] = tipo_teste
+                    else:
+                        arquivos = st.file_uploader(
+                            "Selecione os arquivos (CSV)",
+                            type=["csv"],
+                            accept_multiple_files=True,
+                            key="equilibrio_arquivos_tres",
+                        )
+                        if arquivos:
+                            if len(arquivos) != 3:
+                                st.error("Selecione exatamente 3 arquivos CSV.")
+                            else:
+                                dados_lista = []
+                                erro = False
+                                for arquivo in arquivos:
+                                    dados = carregar_dados_generico(arquivo)
+                                    if isinstance(dados, dict):
+                                        st.error("Você enviou um arquivo de áudio nesse uploader. Use 'Registro de áudio livre'.")
+                                        erro = True
+                                        break
+                                    elif dados is None:
+                                        st.error("Não foi possível carregar um dos arquivos CSV.")
+                                        erro = True
+                                        break
+                                    dados_lista.append(dados)
+                                if not erro and len(dados_lista) == 3:
+                                    st.success("Dados carregados com sucesso")
+                                    st.session_state["dados"] = dados_lista[0]
+                                    st.session_state["equilibrio_dados_3"] = dados_lista
+                                    st.session_state["equilibrio_resultados_individuais"] = []
+                                    st.session_state["equilibrio_resultado_medias_df"] = None
+                                    st.session_state["tipo_teste"] = tipo_teste
+                else:
+                    arquivo = st.file_uploader("Selecione o arquivo (CSV)", type=["csv"])
+                    if arquivo is not None:
+                        dados = carregar_dados_generico(arquivo)
+                        # aqui, "dados" será DataFrame (texto) ou dict (áudio) — mas nesse fluxo só aceitamos CSV
+                        if isinstance(dados, dict):
+                            st.error("Você enviou um arquivo de áudio nesse uploader. Use 'Registro de áudio livre'.")
+                        elif dados is not None:
+                            st.success("Dados carregados com sucesso")
+                            st.session_state["dados"] = dados
+                            st.session_state["tipo_teste"] = tipo_teste
 
             # --------- Áudio ---------
             elif tipo_teste == "Registro de áudio livre":
@@ -879,63 +1010,48 @@ elif pagina == "📤 Exportar Resultados":
             if "intervalo" not in st.session_state:
                 st.warning("Defina o intervalo na página de Visualização primeiro.")
             else:
-                dados = st.session_state["dados"]
                 startRec, endRec, fc = st.session_state["intervalo"]
+                modo_equilibrio = st.session_state.get("equilibrio_modo_processamento", "individual")
 
-                rms_ml, rms_ap, total_deviation, ellipse_area, avg_x, avg_y, width, height, angle, direction = \
-                    balanceProcessing.processar_equilibrio(dados, startRec, endRec, 1, 1, fc)
+                if modo_equilibrio == "3_arquivos":
+                    dados_lista = st.session_state.get("equilibrio_dados_3")
+                    if not dados_lista or len(dados_lista) != 3:
+                        st.error("Dados do Equilíbrio (3 arquivos) não encontrados. Reimporte os arquivos.")
+                    else:
+                        resultados_individuais = [
+                            _calcular_variaveis_equilibrio(dados, startRec, endRec, fc)
+                            for dados in dados_lista
+                        ]
+                        st.session_state["equilibrio_resultados_individuais"] = resultados_individuais
+                        medias_df = _montar_df_medias_equilibrio(resultados_individuais)
+                        st.session_state["equilibrio_resultado_medias_df"] = medias_df
 
-                tempo_sel, ml_sel, ap_sel, freqs_sel, psd_ml_sel, psd_ap_sel = \
-                    balanceProcessing.processar_equilibrio(dados, startRec, endRec, 1, 0, fc)
-                
-                LF_power_ml = trapezoid(psd_ml_sel[0:4], freqs_sel[0:4])
-                LF_power_ap = trapezoid(psd_ap_sel[0:4], freqs_sel[0:4])
-                
-                MF_power_ml = trapezoid(psd_ml_sel[5:19], freqs_sel[5:19])
-                MF_power_ap = trapezoid(psd_ap_sel[5:19], freqs_sel[5:19])
+                        st.download_button(
+                            "📄 Exportar médias (CSV)",
+                            data=medias_df.to_csv(index=False),
+                            file_name="equilibrio_medias_3_arquivos.csv",
+                            mime="text/csv"
+                        )
 
-                HF_power_ml = trapezoid(psd_ml_sel[20:79], freqs_sel[20:79])
-                HF_power_ap = trapezoid(psd_ap_sel[20:79], freqs_sel[20:79])
-                
-                total_power_ml = trapezoid(psd_ml_sel, freqs_sel)
-                total_power_ap = trapezoid(psd_ap_sel, freqs_sel)
+                        for indice, variaveis in enumerate(resultados_individuais, start=1):
+                            resultado_txt = _formatar_resultado_txt(variaveis)
+                            st.download_button(
+                                f"📄 Exportar resultados execução {indice} (.txt)",
+                                data=resultado_txt,
+                                file_name=f"resultados_analise_postural_execucao_{indice}.txt",
+                                mime="text/plain"
+                            )
+                else:
+                    dados = st.session_state["dados"]
+                    variaveis = _calcular_variaveis_equilibrio(dados, startRec, endRec, fc)
+                    resultado_txt = _formatar_resultado_txt(variaveis)
 
-                for index, val in enumerate(psd_ml_sel):
-                    if np.sum(psd_ml_sel[0:index]) > total_power_ml/2:
-                        freq_median_ml = freqs_sel[index-1]
-                        break
-
-                for index, val in enumerate(psd_ap_sel):
-                    if np.sum(psd_ap_sel[0:index]) > total_power_ap/2:
-                        freq_median_ap = freqs_sel[index-1]
-                        break
-
-                resultado_txt = "Variável\tValor\n"
-                variaveis = [
-                    ("RMS ML", round(rms_ml, 6)),
-                    ("RMS AP", round(rms_ap, 6)),
-                    ("Desvio total", round(total_deviation, 6)),
-                    ("Área elipse", round(ellipse_area, 6)),
-                    ("Potência total ML", round(total_power_ml, 10)),
-                    ("Potência total AP", round(total_power_ap, 10)),
-                    ("Potência Baixa Freq ML", round(LF_power_ml, 10)),
-                    ("Potência Baixa Freq AP", round(LF_power_ap, 10)),
-                    ("Potência Média Freq ML", round(MF_power_ml, 10)),
-                    ("Potência Média Freq AP", round(MF_power_ap, 10)),
-                    ("Potência Alta Freq ML", round(HF_power_ml, 10)),
-                    ("Potência Alta Freq AP", round(HF_power_ml, 10)),
-                    ("Frequência mediana ML", round(freq_median_ml, 10)),
-                    ("Frequência mediana AP", round(freq_median_ap, 10)),
-                ]
-                for nome, valor in variaveis:
-                    resultado_txt += f"{nome}\t{valor}\n"
-
-                st.download_button(
-                    "📄 Exportar resultados (.txt)",
-                    data=resultado_txt,
-                    file_name="resultados_analise_postural.txt",
-                    mime="text/plain"
-                )
+                    st.download_button(
+                        "📄 Exportar resultados (.txt)",
+                        data=resultado_txt,
+                        file_name="resultados_analise_postural.txt",
+                        mime="text/plain"
+                    )
         if tipo_teste == "TUG":
             
             baseline_onset = st.session_state["baseline_onset"]
@@ -1310,10 +1426,6 @@ elif pagina == "📖 Referências bibliográficas":
     </div>
     """)
     st.markdown(html, unsafe_allow_html=True)
-
-
-
-
 
 
 
