@@ -62,46 +62,12 @@ def processar_equilibrio(df, startRec, endRec, sel, output, filter):
     x = df_proc["X"]
     z = df_proc["Z"]
 
-    ml = x
-    ap = z
+    ml_filtrado = detrend(x.astype(float).to_numpy())
+    ap_filtrado = detrend(z.astype(float).to_numpy())
+    t_original = (time_vec.astype(float) / 1000).to_numpy()
+    dt = np.median(np.diff(t_original))
+    fs = 1 / dt if dt > 0 else 100
 
-    # Converter tempo para segundos
-    t_original = time_vec / 1000  # ms para s
-
-    # Criar vetor de tempo para 100 Hz
-    fs_novo = 100  # Hz
-    dt_novo = 1 / fs_novo
-    t_novo = np.arange(t_original.iloc[0], t_original.iloc[-1], dt_novo)
-
-    # Interpoladores
-    interp_ap = interp1d(t_original, ap, kind='linear',
-                         fill_value="extrapolate")
-    interp_ml = interp1d(t_original, ml, kind='linear',
-                         fill_value="extrapolate")
-
-    # Sinais reamostrados
-    ap_interp_100Hz = interp_ap(t_novo)
-    ml_interp_100Hz = interp_ml(t_novo)
-
-    # 1. Remover tendência
-    ap_detrended = detrend(ap_interp_100Hz)
-    ml_detrended = detrend(ml_interp_100Hz)
-
-    # 2. Filtro Butterworth passa-baixa com parâmetros da sidebar
-    fs = 100  # Hz
-    cutoff = filter  # Usando valor da sidebar
-    order = 4  # Usando valor da sidebar
-
-    # Normaliza a frequência de corte (Nyquist = fs/2)
-    nyquist = fs / 2
-    normal_cutoff = cutoff / nyquist
-
-    # Coeficientes do filtro
-    b, a = butter(order, normal_cutoff, btype='low', analog=False)
-
-    # Aplicando o filtro com zero-phase (filtfilt)
-    ap_filtrado = filtfilt(b, a, ap_detrended)
-    ml_filtrado = filtfilt(b, a, ml_detrended)
     if sel == 1:
         positive_freqs, psd_ml, psd_ap = spectrum_plot(
             ml_filtrado[startRec:endRec], ap_filtrado[startRec:endRec], fs)
@@ -112,6 +78,6 @@ def processar_equilibrio(df, startRec, endRec, sel, output, filter):
             ml_filtrado, ap_filtrado, fs)
 
     if output == 0:
-        return t_novo, ml_filtrado, ap_filtrado, positive_freqs, psd_ml, psd_ap
+        return t_original, ml_filtrado, ap_filtrado, positive_freqs, psd_ml, psd_ap
     else:
         return rms_ml, rms_ap, total_deviation, ellipse_area, avg_x, avg_y, width, height, angle, direction
